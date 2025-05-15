@@ -1,6 +1,23 @@
-pandas>=1.5.0
-numpy>=1.21.0
-python-dotenv>=0.19.0
-tqdm>=4.62.0
-scikit-learn>=0.24.0
-requests>=2.25.0 
+# 🔹 Core Libraries
+pandas
+numpy
+tqdm
+python-dotenv
+httpx
+requests
+
+# 🔹 Prompt Engineering & API
+langchain-community
+openai
+tiktoken             # 정확한 토큰 계산을 원할 경우
+
+# 🔹 Vector DB (RAG)
+chromadb             # Chroma vector store
+duckdb               # Chroma 내부 사용 DB (자동 설치되지만 명시해도 무방)
+
+# 🔹 Optional (Langchain split/loader에 필요)
+unstructured
+pypdf
+
+# 🔹 CLI & Utilities (선택)
+argparse             # (표준 라이브러리지만 명시적 선언 가능)

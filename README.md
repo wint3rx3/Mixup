@@ -1,3 +1,5 @@
+## 🔁 강화학습형 프롬프트 최적화
+
 ## 🗂️ 파일 디렉토리 구조
 ```text
 grammar-correction-project/
@@ -51,4 +53,43 @@ grammar-correction-project/
 │       ├── experiment_log.jsonl       # 실험별 성능 기록
 │       ├── template_eval_scores.csv   # 템플릿 별 점수 비교표
 │       └── risky_templates.csv        # 필터링 대상 로그
+```
+
+```
+grammar-correction-project/
+│
+├── .env                        # API 키 저장 (UPSTAGE_API_KEY)
+├── requirements.txt
+├── README.md                   # 전체 구조 및 실행 설명
+│
+├── data/                       # 원본 학습 및 평가 데이터
+│   ├── train.csv
+│   ├── test.csv
+│   └── sample_submission.csv
+│
+├── submission/                 # ✅ 최종 제출 전용 (룰에 맞춘 단일 템플릿 inference)
+│   ├── main.py                 # test.csv → submission.csv 생성
+│   ├── config.py
+│   ├── prompts/templates.py    # 선정된 템플릿 1개
+│   ├── utils/experiment.py
+│   ├── utils/metrics.py
+│   └── outputs/submission.csv
+│
+├── optimizer/                  # 🧪 프롬프트 최적화 및 강화 루프 전용
+│   ├── optimize.py                 # 🔁 전체 강화 루프 제어 (세대 반복)
+│   ├── async_runner.py             # ⚡ 비동기 평가기 (batch 평가)
+│   ├── template_rewriter.py        # 🧠 LLM 기반 자식 템플릿 생성기
+│   ├── reinforce_graph.py          # 🌳 템플릿 그래프 관리 + memory 기록
+│   ├── prompt_validator.py         # 🛡️ 위험 프롬프트 필터링 (금지 표현, 등)
+│   ├── token_counter.py            # 🔢 토큰 길이 검사 (2000 제한)
+│   └── memory.jsonl                # 🧠 템플릿 세대, 성능 기록 (그래프)
+│
+├── rag/                        # 📚 문법 기반 RAG 참조 자료 (선택)
+│   ├── grammar_reference.txt
+│   └── grammar_chunks.jsonl
+│
+└── utils/                      # 공통 유틸리티
+    ├── experiment.py               # 기존 동기 평가기 (baseline 용)
+    ├── metrics.py                  # recall/precision 측정
+
 ```

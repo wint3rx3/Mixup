@@ -5,9 +5,9 @@ from tqdm import tqdm
 from typing import Dict, List
 import requests
 
-from code.config import ExperimentConfig
-from code.prompts.templates import TEMPLATES
-from code.utils.metrics import evaluate_correction
+from submission.config import ExperimentConfig
+from submission.prompts.templates import TEMPLATES
+from submission.utils.metrics import evaluate_correction
 
 class ExperimentRunner:
     def __init__(self, config: ExperimentConfig, api_key: str):
