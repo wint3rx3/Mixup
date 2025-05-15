@@ -86,13 +86,10 @@ class AsyncExperimentRunner:
         train_data: pd.DataFrame,
         valid_data: pd.DataFrame
     ) -> Dict:
-        print(f"\n=== [비동기] {self.template} 템플릿 실험 ===")
 
-        print("\n[학습 데이터 평가]")
         train_results = self.run(train_data)
         train_score = evaluate_correction(train_data, train_results)
 
-        print("\n[검증 데이터 평가]")
         valid_results = self.run(valid_data)
         valid_score = evaluate_correction(valid_data, valid_results)
 

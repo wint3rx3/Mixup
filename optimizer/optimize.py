@@ -84,13 +84,22 @@ def main_loop(max_generation=5, top_k=5, n_children=3, toy_size=100, reward_stra
         current_gen = graph.get_generation(gen)
         evaluated_nodes = []
 
-        for node in current_gen:
-            print(f"\n🧪 템플릿 ID: {node['id']}")
-            print(f"템플릿:\n{node['template']}")
+        for i, node in enumerate(current_gen):
             runner = runner_cls(ExperimentConfig(template_name=node["id"]), api_key, node["template"])
             result = runner.run_template_experiment(train_data, valid_data)
+
             node["train_recall"] = result["train_recall"]
             node["valid_recall"] = result["valid_recall"]
+
+            recall = node["valid_recall"].get("recall", 0)
+            precision = node["valid_recall"].get("precision", 0)
+            reward = compute_reward(node, strategy=reward_strategy)
+
+            if reward < 0.01:
+                continue  
+
+            print(f"[{i+1}/{len(current_gen)}] 템플릿 ID: {node['id']} | recall: {recall:.2f} | precision: {precision:.2f} | 보상: {reward:.2f}")
+
             evaluated_nodes.append(node)
 
         graph.append_nodes(evaluated_nodes)
@@ -110,26 +119,23 @@ def main_loop(max_generation=5, top_k=5, n_children=3, toy_size=100, reward_stra
 
         topk = soft_topk_selection(evaluated_nodes, top_k, epsilon=0.3)
 
-        # ✅ 자식 템플릿 생성 확인
-        print(f"\n📦 자식 템플릿 생성 중... ({n_children}개씩)")
+        # 자식 템플릿 생성 확인
+        print(f"\n == 자식 템플릿 생성 ==")
         children = generate_child_prompts(topk, n_children, api_key)
 
-        print("\n🔍 생성된 자식 템플릿:")
+        print("\n 생성된 자식 템플릿:")
         for c in children:
             print(f"- {c['id']} | 부모: {c['parent_ids']}")
-            print(f"  템플릿:\n{c['template']}\n")
+            print(f"  템플릿: {c['template']}\n")
 
         deduped = deduplicate_templates(children)
 
-        # ✅ 유효성 검사 로그 추가
-        print("\n✅ 유효성 검사 시작...")
+        # 유효성 검사 로그 추가
+        print("\n == 유효성 검사 시작 ==")
         filtered = []
         for c in deduped:
-            print(f"검사 중: {c['id']}")
             if validate_template(c["template"], verbose=True):
                 filtered.append(c)
-            else:
-                print("🚫 유효하지 않은 템플릿 제거됨\n")
 
         print(f"[GEN {gen+1}] 유효한 자식 수: {len(filtered)}개")
         graph.append_nodes(filtered)
@@ -143,6 +149,6 @@ if __name__ == "__main__":
         max_generation=3,       # 루프 3세대
         top_k=3,                # 상위 3개 선택
         n_children=3,           # 자식 3개씩 생성
-        toy_size=30,            # 평가용 샘플 30개
+        toy_size=10,            # 평가용 샘플 10개
         reward_strategy="f1_penalized"  # 복합 점수 활용
     )

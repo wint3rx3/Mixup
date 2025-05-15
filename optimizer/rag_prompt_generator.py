@@ -9,10 +9,9 @@ from langchain.document_loaders import TextLoader
 from langchain.prompts import PromptTemplate
 from openai import OpenAI
 
-load_dotenv()  # 반드시 호출해야 함
+load_dotenv()
 
-# ========= 🌞 Upstage API 설정 ========= #
-
+# Upstage API 설정
 UPSTAGE_API_KEY = os.environ["UPSTAGE_API_KEY"]
 SOLAR_EMBEDDING_URL = "https://api.upstage.ai/v1/embeddings"
 SOLAR_LLM_MODEL = "solar-pro"
@@ -22,8 +21,7 @@ client = OpenAI(
     base_url="https://api.upstage.ai/v1"
 )
 
-# ========= 🌞 Solar Embedding 래퍼 ========= #
-
+# Solar Embedding 래퍼
 def get_solar_embedding(text: str) -> List[float]:
     headers = {
         "Authorization": f"Bearer {UPSTAGE_API_KEY}",
@@ -44,8 +42,7 @@ class SolarEmbeddingWrapper:
     def embed_query(self, text: str) -> List[float]:
         return get_solar_embedding(text)
 
-# ========= 🔧 벡터 DB 초기화 ========= #
-
+# 벡터 DB 초기화
 def init_vectorstore(persist_dir="rag_db"):
     if not os.path.exists(persist_dir) or not os.listdir(persist_dir):
         print("🔄 벡터 DB 초기화 중...")
@@ -59,13 +56,12 @@ def init_vectorstore(persist_dir="rag_db"):
         Chroma.from_documents(docs, embedding, persist_directory=persist_dir)
         print("✅ 벡터 DB 생성 완료")
 
-# ✅ 전역 초기화
+# 전역 초기화
 embedding = SolarEmbeddingWrapper()
 vectorstore = Chroma(persist_directory="rag_db", embedding_function=embedding)
 retriever = vectorstore.as_retriever()
 
-# ========= 🧠 LLM 호출 함수 ========= #
-
+# LLM 호출 함수
 def call_solar_llm(prompt: str) -> str:
     response = client.chat.completions.create(
         model=SOLAR_LLM_MODEL,
@@ -75,14 +71,12 @@ def call_solar_llm(prompt: str) -> str:
     )
     return response.choices[0].message.content.strip()
 
-# ========= 🔍 context 검색 ========= #
-
+# context 검색
 def retrieve_context(query: str, k: int = 3) -> str:
     docs = retriever.get_relevant_documents(query)[:k]
     return "\n".join([doc.page_content for doc in docs])
 
-# ========= ✅ 단일 템플릿 개선 ========= #
-
+# 단일 템플릿 개선
 def generate_prompt(prompt_text: str) -> str:
     context = retrieve_context(prompt_text)
     prompt_template = PromptTemplate(
@@ -102,13 +96,17 @@ def generate_prompt(prompt_text: str) -> str:
     full_prompt = prompt_template.format(context=context, text=prompt_text)
     return call_solar_llm(full_prompt)
 
-# ========= ✅ 여러 개 템플릿 생성 (batch) ========= #
-
+# 여러 개 템플릿 생성 (batch)
 def generate_prompts_batch(prompt_text: str, n: int = 3) -> List[str]:
     context = retrieve_context(prompt_text)
     batch_prompt = f"""
-다음은 한국어 맞춤법 교정 프롬프트입니다. 아래 참고 문서를 기반으로,
-새로운 교정 프롬프트 {n}개를 생성해주세요. 간결하고 명확하게 작성하세요.
+당신은 한국어 맞춤법 교정 프롬프트 생성 전문가입니다.
+
+다음 조건에 맞춰 프롬프트 {n}개를 생성하세요:
+- 각 프롬프트는 반드시 {{text}} 자리표시자를 **정확히 1회만** 포함해야 합니다.
+- {{text}}는 교정 대상 문장이 들어갈 위치입니다.
+- 프롬프트는 한 줄로 간결하고 명확하게 작성하세요.
+- 총 {n}줄로 출력하세요.
 
 [참고 문서 요약]
 {context}
@@ -119,17 +117,19 @@ def generate_prompts_batch(prompt_text: str, n: int = 3) -> List[str]:
 [개선된 템플릿 목록]
 """
     response = call_solar_llm(batch_prompt)
-    return [line.strip() for line in response.strip().split("\n") if len(line.strip()) > 10][:n]
+    return [
+        line.strip()
+        for line in response.strip().split("\n")
+        if "{text}" in line and line.strip().count("{text}") == 1 and len(line.strip()) > 10
+    ][:n]
 
-# ========= ✅ 테스트 ========= #
-
+# 테스트
 if __name__ == "__main__":
     init_vectorstore()
-
     seed_prompt = "다음 문장을 고쳐줘: {text}"
 
-    print("\n✅ 단일 개선 결과:")
+    print("\n 단일 개선 결과:")
     print(generate_prompt(seed_prompt))
 
-    print("\n✅ 배치 개선 결과:")
+    print("\n 배치 개선 결과:")
     print(generate_prompts_batch(seed_prompt, n=3))
