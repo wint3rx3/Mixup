@@ -1,3 +1,5 @@
+# optimizer/async_runner.py
+
 import asyncio
 import httpx
 import pandas as pd
@@ -12,25 +14,29 @@ class AsyncExperimentRunner:
         self.template = template
         self.api_url = config.api_url
         self.model = config.model
-        self.semaphore = asyncio.Semaphore(2)  # 초당 2건 제한 보호
+        # 더 이상 여기서 Semaphore 생성하지 않습니다.
 
     def _make_prompt(self, text: str) -> str:
         return self.template.format(text=text)
 
-    async def _call_api(self, prompt: str, client: httpx.AsyncClient) -> str:
+    async def _call_api(
+        self,
+        prompt: str,
+        client: httpx.AsyncClient,
+        semaphore: asyncio.Semaphore
+    ) -> str:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         data = {
             "model": self.model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
+            "messages": [{"role": "user", "content": prompt}]
         }
 
-        async with self.semaphore:
-            for attempt in range(3):  # 최대 3회 시도
+        # 루프 내에서 생성된 semaphore 사용
+        async with semaphore:
+            for attempt in range(3):  # 최대 3회 재시도
                 try:
                     response = await client.post(
                         self.api_url,
@@ -38,18 +44,30 @@ class AsyncExperimentRunner:
                         json=data,
                         timeout=10.0
                     )
+                    if response.status_code == 429:
+                        wait = 2 ** attempt  # 1s, 2s, 4s
+                        print(f"[429 Too Many Requests] {attempt+1}/3회. {wait}초 대기 후 재시도...")
+                        await asyncio.sleep(wait)
+                        continue
+
                     response.raise_for_status()
                     result = response.json()
                     return result["choices"][0]["message"]["content"]
                 except Exception as e:
-                    print(f"[Attempt {attempt + 1}/3] API 호출 실패: {e}")
-                    await asyncio.sleep(1.5 * (attempt + 1))  # backoff
+                    print(f"[Attempt {attempt+1}/3] API 호출 실패: {e}")
+                    await asyncio.sleep(2 * (attempt + 1))
             return "[ERROR]"
 
     async def _evaluate_batch(self, rows: List[dict]) -> List[dict]:
+        # 이벤트 루프와 함께 사용할 semaphore를 여기서 생성
+        semaphore = asyncio.Semaphore(2)  # 초당 최대 2병렬 요청
         async with httpx.AsyncClient() as client:
             tasks = [
-                self._call_api(self._make_prompt(row['err_sentence']), client)
+                self._call_api(
+                    self._make_prompt(row['err_sentence']),
+                    client,
+                    semaphore
+                )
                 for row in rows
             ]
             responses = await asyncio.gather(*tasks)
@@ -63,7 +81,11 @@ class AsyncExperimentRunner:
         results = asyncio.run(self._evaluate_batch(rows))
         return pd.DataFrame(results)
 
-    def run_template_experiment(self, train_data: pd.DataFrame, valid_data: pd.DataFrame) -> Dict:
+    def run_template_experiment(
+        self,
+        train_data: pd.DataFrame,
+        valid_data: pd.DataFrame
+    ) -> Dict:
         print(f"\n=== [비동기] {self.template} 템플릿 실험 ===")
 
         print("\n[학습 데이터 평가]")
