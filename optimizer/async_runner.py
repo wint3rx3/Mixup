@@ -60,7 +60,7 @@ class AsyncExperimentRunner:
 
     async def _evaluate_batch(self, rows: List[dict]) -> List[dict]:
         # 이벤트 루프와 함께 사용할 semaphore를 여기서 생성
-        semaphore = asyncio.Semaphore(2)  # 초당 최대 2병렬 요청
+        semaphore = asyncio.Semaphore(5)  # 초당 최대 5병렬 요청
         async with httpx.AsyncClient() as client:
             tasks = [
                 self._call_api(

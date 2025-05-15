@@ -85,8 +85,9 @@ def main_loop(max_generation=5, top_k=5, n_children=3, toy_size=100, reward_stra
         evaluated_nodes = []
 
         for node in current_gen:
-            config = ExperimentConfig(template_name=node["id"])
-            runner = runner_cls(config, api_key, node["template"])
+            print(f"\n🧪 템플릿 ID: {node['id']}")
+            print(f"템플릿:\n{node['template']}")
+            runner = runner_cls(ExperimentConfig(template_name=node["id"]), api_key, node["template"])
             result = runner.run_template_experiment(train_data, valid_data)
             node["train_recall"] = result["train_recall"]
             node["valid_recall"] = result["valid_recall"]
@@ -94,14 +95,12 @@ def main_loop(max_generation=5, top_k=5, n_children=3, toy_size=100, reward_stra
 
         graph.append_nodes(evaluated_nodes)
 
-        # 성능 요약
         rewards = [compute_reward(n, strategy=reward_strategy) for n in evaluated_nodes]
         best = max(rewards)
         avg = sum(rewards) / len(rewards)
         print(f"[GEN {gen}] 평균 reward: {avg:.2f}, 최고 reward: {best:.2f}")
         best_score_history.append(best)
 
-        # 조기 종료 (성능 정체 감지)
         if gen >= patience and all(
             best_score_history[-1] <= best_score_history[-1 - i]
             for i in range(1, patience + 1)
@@ -109,12 +108,29 @@ def main_loop(max_generation=5, top_k=5, n_children=3, toy_size=100, reward_stra
             print("🔚 성능 개선 정체로 조기 종료합니다.")
             break
 
-        # 다음 세대 자식 생성
         topk = soft_topk_selection(evaluated_nodes, top_k, epsilon=0.3)
+
+        # ✅ 자식 템플릿 생성 확인
+        print(f"\n📦 자식 템플릿 생성 중... ({n_children}개씩)")
         children = generate_child_prompts(topk, n_children, api_key)
-        filtered = [
-            c for c in deduplicate_templates(children) if validate_template(c["template"])
-        ]
+
+        print("\n🔍 생성된 자식 템플릿:")
+        for c in children:
+            print(f"- {c['id']} | 부모: {c['parent_ids']}")
+            print(f"  템플릿:\n{c['template']}\n")
+
+        deduped = deduplicate_templates(children)
+
+        # ✅ 유효성 검사 로그 추가
+        print("\n✅ 유효성 검사 시작...")
+        filtered = []
+        for c in deduped:
+            print(f"검사 중: {c['id']}")
+            if validate_template(c["template"], verbose=True):
+                filtered.append(c)
+            else:
+                print("🚫 유효하지 않은 템플릿 제거됨\n")
+
         print(f"[GEN {gen+1}] 유효한 자식 수: {len(filtered)}개")
         graph.append_nodes(filtered)
 
