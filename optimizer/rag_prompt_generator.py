@@ -43,7 +43,7 @@ class SolarEmbeddingWrapper:
         return get_solar_embedding(text)
 
 # 벡터 DB 초기화
-def init_vectorstore(persist_dir="rag_db"):
+def init_vectorstore(persist_dir="rag"):
     if not os.path.exists(persist_dir) or not os.listdir(persist_dir):
         print("🔄 벡터 DB 초기화 중...")
         loader = TextLoader("reference_docs/national_institute.txt", encoding="utf-8")
@@ -58,7 +58,7 @@ def init_vectorstore(persist_dir="rag_db"):
 
 # 전역 초기화
 embedding = SolarEmbeddingWrapper()
-vectorstore = Chroma(persist_directory="rag_db", embedding_function=embedding)
+vectorstore = Chroma(persist_directory="rag", embedding_function=embedding)
 retriever = vectorstore.as_retriever()
 
 # LLM 호출 함수
@@ -73,48 +73,67 @@ def call_solar_llm(prompt: str) -> str:
 
 # context 검색
 def retrieve_context(query: str, k: int = 3) -> str:
-    docs = retriever.get_relevant_documents(query)[:k]
+    docs = retriever.invoke(query)[:k]
     return "\n".join([doc.page_content for doc in docs])
 
-# 단일 템플릿 개선
-def generate_prompt(prompt_text: str) -> str:
-    context = retrieve_context(prompt_text)
-    prompt_template = PromptTemplate(
-        input_variables=["context", "text"],
-        template="""다음은 한국어 맞춤법 교정 프롬프트입니다. 아래 참고 문서를 기반으로,
-더 성능이 좋은 프롬프트를 생성해주세요.
+def retrieve_error_patterns(k: int = None) -> str:
+    path = "optimizer/prompt_error_patterns.jsonl"
+    if not os.path.exists(path):
+        return ""
+    
+    with open(path, encoding="utf-8") as f:
+        lines = [json.loads(l.strip()) for l in f if l.strip()]
+    
+    if not lines:
+        return ""
+    
+    # 자동 결정
+    if k is None:
+        total = len(lines)
+        k = min(10, max(3, total // 10))  # 예: 전체의 10% 또는 최대 10개
 
-[참고 문서 요약]
-{context}
+    samples = lines[-k:]
+    formatted = []
+    for err in samples:
+        from_text = err.get("wrong_change_from", "").strip()
+        to_text = err.get("wrong_change_to", "").strip()
+        if from_text and to_text:
+            formatted.append(f"- '{from_text}' → '{to_text}' 는 과잉 교정 가능성이 있으므로 피해야 함")
+    return "\n".join(formatted)
 
-[기존 템플릿]
-{text}
 
-[개선된 템플릿]
-"""
-    )
-    full_prompt = prompt_template.format(context=context, text=prompt_text)
-    return call_solar_llm(full_prompt)
-
-# 여러 개 템플릿 생성 (batch)
 def generate_prompts_batch(prompt_text: str, n: int = 3) -> List[str]:
     context = retrieve_context(prompt_text)
+    error_hints = retrieve_error_patterns(k=10)
+
     batch_prompt = f"""
-당신은 한국어 맞춤법 교정 프롬프트 생성 전문가입니다.
+당신은 한국어 문법 교정 전문가이자 프롬프트 최적화 대회 참가자입니다.
 
-다음 조건에 맞춰 프롬프트 {n}개를 생성하세요:
+아래의 문맥과 실패 사례를 참고하여 AI 모델이 사용할 프롬프트 {n}개를 생성하세요.
+
+[목표]
+- AI가 입력 문장의 문법, 맞춤법, 띄어쓰기, 조사, 어미, 문장 부호 오류를 정확하게 수정할 수 있도록 프롬프트를 설계하세요.
+- 교정 결과는 정답 문장과 최대한 유사해야 하며, **과잉 수정은 반드시 피해야 합니다.**
+- 교정 프롬프트는 실제 SNS, 커뮤니티 등 구어체 문장에도 잘 작동해야 하며, 실용적이고 구조적인 지시를 포함해야 합니다.
+
+[작성 지침]
 - 각 프롬프트는 반드시 {{text}} 자리표시자를 **정확히 1회만** 포함해야 합니다.
-- {{text}}는 교정 대상 문장이 들어갈 위치입니다.
-- 프롬프트는 한 줄로 간결하고 명확하게 작성하세요.
-- 총 {n}줄로 출력하세요.
+- 프롬프트는 1~5문장 사이로 자유롭게 작성하되, 문장 구조와 의도가 명확해야 합니다.
+- 출력에는 교정된 문장 외에 설명, 분석, 마크다운이 포함되지 않도록 유도하세요.
 
-[참고 문서 요약]
-{context}
+[실패 교정 사례]
+아래는 과거 프롬프트가 잘못된 교정을 유도한 예시입니다. 
+이런 오류가 재발하지 않도록 설계에 반영하세요.
+
+{error_hints}
 
 [기존 템플릿]
 {prompt_text}
 
-[개선된 템플릿 목록]
+[참고 문서 요약]
+{context}
+
+[개선된 프롬프트 목록]
 """
     response = call_solar_llm(batch_prompt)
     return [
@@ -127,9 +146,6 @@ def generate_prompts_batch(prompt_text: str, n: int = 3) -> List[str]:
 if __name__ == "__main__":
     init_vectorstore()
     seed_prompt = "다음 문장을 고쳐줘: {text}"
-
-    print("\n 단일 개선 결과:")
-    print(generate_prompt(seed_prompt))
 
     print("\n 배치 개선 결과:")
     print(generate_prompts_batch(seed_prompt, n=3))

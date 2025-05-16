@@ -1,15 +1,20 @@
 import os
 import time
+import json
 import random
 from dotenv import load_dotenv
 import pandas as pd
 from submission.config import ExperimentConfig
-from submission.utils.metrics import evaluate_correction
+from submission.utils.metrics import evaluate_correction, extract_false_corrections
 from optimizer.base_templates import BASE_TEMPLATES
 from optimizer.async_runner import AsyncExperimentRunner
 from optimizer.template_rewriter import generate_child_prompts
 from optimizer.prompt_validator import validate_template, count_tokens
 from optimizer.reinforce_graph import ReinforceGraph
+
+from langchain.schema import Document
+from langchain.vectorstores import Chroma
+from optimizer.rag_prompt_generator import SolarEmbeddingWrapper
 
 def compute_reward(node, strategy="f1_penalized"):
     recall = node['valid_recall'].get('recall', 0)
@@ -91,15 +96,37 @@ def main_loop(max_generation=5, top_k=5, n_children=3, toy_size=100, reward_stra
             node["train_recall"] = result["train_recall"]
             node["valid_recall"] = result["valid_recall"]
 
+            try:
+                errors = extract_false_corrections(valid_data, result["valid_results"])
+                if errors:
+                    # 1. 로그 저장
+                    with open("rag/prompt_error_patterns.jsonl", "a", encoding="utf-8") as f:
+                        for e in errors:
+                            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+
+                    # 2. 벡터 문서 저장
+                    failure_docs = [
+                        Document(page_content=f"""입력 문장: {e['original']}
+예측 문장: {e['prediction']}
+정답 문장: {e['correct']}""")
+                        for e in errors
+                    ]
+                    Chroma.from_documents(
+                        failure_docs,
+                        embedding=SolarEmbeddingWrapper(),
+                        persist_directory="rag"
+                    )
+            except Exception as e:
+                print(f"[오류 패턴 저장 실패] {e}")
+
             recall = node["valid_recall"].get("recall", 0)
             precision = node["valid_recall"].get("precision", 0)
             reward = compute_reward(node, strategy=reward_strategy)
 
             if reward < 0.01:
-                continue  
+                continue
 
             print(f"[{i+1}/{len(current_gen)}] 템플릿 ID: {node['id']} | recall: {recall:.2f} | precision: {precision:.2f} | 보상: {reward:.2f}")
-
             evaluated_nodes.append(node)
 
         graph.append_nodes(evaluated_nodes)
@@ -148,7 +175,7 @@ if __name__ == "__main__":
     main_loop(
         max_generation=3,       # 루프 3세대
         top_k=3,                # 상위 3개 선택
-        n_children=3,           # 자식 3개씩 생성
-        toy_size=10,            # 평가용 샘플 10개
+        n_children=2,           # 자식 3개씩 생성
+        toy_size=30,            # 평가용 샘플 30개
         reward_strategy="f1_penalized"  # 복합 점수 활용
     )

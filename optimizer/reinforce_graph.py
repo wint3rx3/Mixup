@@ -4,7 +4,7 @@ from typing import List, Dict, Optional
 
 
 class ReinforceGraph:
-    def __init__(self, memory_path: str = "optimizer/memory.jsonl"):  # memory 저장 경로 지정
+    def __init__(self, memory_path: str = "runs/memory.jsonl"):  # memory 저장 경로 지정
         self.memory_path = memory_path
         os.makedirs(os.path.dirname(memory_path), exist_ok=True)
         if not os.path.exists(memory_path):
