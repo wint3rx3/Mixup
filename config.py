@@ -23,6 +23,6 @@ FORBIDDEN_PHRASES = [
 ALLOWED_ROLES = {"system", "user"}
 
 # 🧪 실험 파라미터
-SAMPLE_SIZE = 750
+SAMPLE_SIZE = 10
 TOP_K = 3
 N_CHILDREN = 2

@@ -29,7 +29,7 @@ def validate_template(template: Union[str, List[Dict]], verbose: bool = False) -
             print("❌ [금지 표현] 템플릿에 금지된 문구가 포함되어 있습니다.")
         return False
 
-    if isinstance(template, list):
+    if isinstance(template, list):  # ✅ multi-turn
         roles = [t.get("role") for t in template]
         if not set(roles).issubset(ALLOWED_ROLES):
             if verbose:
@@ -39,11 +39,11 @@ def validate_template(template: Union[str, List[Dict]], verbose: bool = False) -
             if verbose:
                 print("❌ [구성 오류] user 역할이 포함되어 있지 않습니다.")
             return False
-        if not any("{text}" in t.get("content", "") for t in template):
+        if not any("{text}" in t.get("content", "") for t in template):  # ✅ 역할별로 검사
             if verbose:
                 print("❌ [자리표시자 누락] 멀티턴 템플릿에 {{text}}가 포함되어 있지 않습니다.")
             return False
-    else:
+    else:  # ✅ single-turn
         if "{text}" not in prompt_str:
             if verbose:
                 print("❌ [자리표시자 누락] 템플릿에 {{text}}가 포함되어 있지 않습니다.")

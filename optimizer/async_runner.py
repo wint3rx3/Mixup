@@ -7,7 +7,6 @@ import csv
 import json
 from tqdm import tqdm
 from config import SAMPLE_SIZE
-from prompts.template_format import format_prompt
 from engine.api_client import call_llm
 
 def load_train_csv(filepath: str, limit: int = 100, shuffle: bool = True):
@@ -23,6 +22,19 @@ def load_train_csv(filepath: str, limit: int = 100, shuffle: bool = True):
             }
             for row in reader[:limit]
         ]
+
+def format_prompt(template, input_text):
+    if isinstance(template, str):  # single-turn
+        return [{"role": "user", "content": template.format(text=input_text)}]
+    elif isinstance(template, list):  # multi-turn
+        return [
+            {
+                "role": msg["role"],
+                "content": msg["content"].format(text=input_text)
+            } for msg in template
+        ]
+    else:
+        raise ValueError(f"Unsupported template format: {type(template)}")
 
 async def run_single(template_obj, row):
     messages = format_prompt(template_obj["template"], row["input"])
