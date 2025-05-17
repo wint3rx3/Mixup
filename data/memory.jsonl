@@ -1,7 +1,0 @@
-{"template_id": "base_06", "eval_count": 299, "avg_recall": 0.9752, "avg_precision": 0.974, "avg_lcs": 27.5}
-{"template_id": "base_04", "eval_count": 299, "avg_recall": 0.9701, "avg_precision": 0.9658, "avg_lcs": 27.45}
-{"template_id": "base_05", "eval_count": 299, "avg_recall": 0.9667, "avg_precision": 0.9654, "avg_lcs": 27.29}
-{"template_id": "base_03", "eval_count": 299, "avg_recall": 0.9694, "avg_precision": 0.9677, "avg_lcs": 27.36}
-{"template_id": "base_07", "eval_count": 299, "avg_recall": 0.9805, "avg_precision": 0.9749, "avg_lcs": 27.67}
-{"template_id": "base_01", "eval_count": 299, "avg_recall": 0.9751, "avg_precision": 0.975, "avg_lcs": 27.53}
-{"template_id": "base_02", "eval_count": 299, "avg_recall": 0.9749, "avg_precision": 0.9762, "avg_lcs": 27.53}
