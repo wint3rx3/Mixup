@@ -121,11 +121,14 @@ def evaluate(results_path=RESULTS_PATH, memory_path=MEMORY_PATH):
     for tid, results in scores_by_template.items():
         recall_avg = sum(r["recall"] for r in results) / len(results)
         precision_avg = sum(r["precision"] for r in results) / len(results)
+        f1 = 2 * recall_avg * precision_avg / (recall_avg + precision_avg) if (recall_avg + precision_avg) > 0 else 0.0
+
         memory.append({
             "template_id": tid,
             "eval_count": len(results),
             "avg_recall": round(recall_avg, 4),
-            "avg_precision": round(precision_avg, 4)
+            "avg_precision": round(precision_avg, 4),
+            "f1": round(f1, 4)  # ✅ 추가!
         })
 
     with open(memory_path, "w", encoding="utf-8") as fout:
