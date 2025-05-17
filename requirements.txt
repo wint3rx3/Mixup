@@ -1,23 +1,6 @@
-# 🔹 Core Libraries
-pandas
-numpy
+aiohttp
+dotenv
 tqdm
-python-dotenv
-httpx
-requests
-
-# 🔹 Prompt Engineering & API
-langchain-community
+pandas
 openai
-tiktoken             # 정확한 토큰 계산을 원할 경우
-
-# 🔹 Vector DB (RAG)
-chromadb             # Chroma vector store
-duckdb               # Chroma 내부 사용 DB (자동 설치되지만 명시해도 무방)
-
-# 🔹 Optional (Langchain split/loader에 필요)
-unstructured
-pypdf
-
-# 🔹 CLI & Utilities (선택)
-argparse             # (표준 라이브러리지만 명시적 선언 가능)
+langchain

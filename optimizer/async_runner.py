@@ -1,101 +1,64 @@
 # optimizer/async_runner.py
 
 import asyncio
-import httpx
-import pandas as pd
-from typing import Dict, List
-from submission.utils.metrics import evaluate_correction
-from submission.config import ExperimentConfig
+import aiohttp
+import random
+import csv
+import json
+from tqdm import tqdm
+from config import SAMPLE_SIZE
 
-class AsyncExperimentRunner:
-    def __init__(self, config: ExperimentConfig, api_key: str, template: str):
-        self.config = config
-        self.api_key = api_key
-        self.template = template
-        self.api_url = config.api_url
-        self.model = config.model
-        # 더 이상 여기서 Semaphore 생성하지 않습니다.
+from prompts.base_templates import BASE_TEMPLATES
+from prompts.template_format import format_prompt
+from engine.api_client import call_llm  # Upstage Solar API에 맞춘 wrapper
 
-    def _make_prompt(self, text: str) -> str:
-        return self.template.format(text=text)
+def load_train_csv(filepath: str, limit: int = 100, shuffle: bool = True):
+    with open(filepath, newline='', encoding='utf-8-sig') as f:
+        reader = list(csv.DictReader(f))
+        if shuffle:
+            random.shuffle(reader)
+        rows = [
+            {
+                "id": row["id"],
+                "input": row["err_sentence"],
+                "target": row.get("cor_sentence")
+            }
+            for row in reader[:limit]
+        ]
+    return rows
 
-    async def _call_api(
-        self,
-        prompt: str,
-        client: httpx.AsyncClient,
-        semaphore: asyncio.Semaphore
-    ) -> str:
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}]
-        }
+async def run_single(template_obj, row):
+    messages = format_prompt(template_obj["template"], row["input"])
+    try:
+        result = await call_llm(messages)
+        result = result.strip()
+    except Exception:
+        return None  # 오류 결과 제외
 
-        # 루프 내에서 생성된 semaphore 사용
-        async with semaphore:
-            for attempt in range(3):  # 최대 3회 재시도
-                try:
-                    response = await client.post(
-                        self.api_url,
-                        headers=headers,
-                        json=data,
-                        timeout=10.0
-                    )
-                    if response.status_code == 429:
-                        wait = 2 ** attempt  # 1s, 2s, 4s
-                        print(f"[429 Too Many Requests] {attempt+1}/3회. {wait}초 대기 후 재시도...")
-                        await asyncio.sleep(wait)
-                        continue
+    return {
+        "template_id": template_obj["id"],
+        "id": row["id"],
+        "input": row["input"],
+        "prediction": result,
+        "target": row.get("target", None)
+    }
 
-                    response.raise_for_status()
-                    result = response.json()
-                    return result["choices"][0]["message"]["content"]
-                except Exception as e:
-                    print(f"[Attempt {attempt+1}/3] API 호출 실패: {e}")
-                    await asyncio.sleep(2 * (attempt + 1))
-            return "[ERROR]"
+async def run_all(train_path="data/train.csv", out_path="data/results.jsonl", limit=100, templates=None):
+    data = load_train_csv(train_path, limit)
 
-    async def _evaluate_batch(self, rows: List[dict]) -> List[dict]:
-        # 이벤트 루프와 함께 사용할 semaphore를 여기서 생성
-        semaphore = asyncio.Semaphore(4)  # 초당 최대 4병렬 요청
-        async with httpx.AsyncClient() as client:
-            tasks = [
-                self._call_api(
-                    self._make_prompt(row['err_sentence']),
-                    client,
-                    semaphore
-                )
-                for row in rows
-            ]
-            responses = await asyncio.gather(*tasks)
-        return [
-            {'id': row['id'], 'cor_sentence': res}
-            for row, res in zip(rows, responses)
+    async with aiohttp.ClientSession():  # session 제거됨
+        tasks = [
+            run_single(template, row)
+            for row in data
+            for template in templates or []
         ]
 
-    def run(self, data: pd.DataFrame) -> pd.DataFrame:
-        rows = data.to_dict(orient='records')
-        results = asyncio.run(self._evaluate_batch(rows))
-        return pd.DataFrame(results)
+        results = []
+        for f in tqdm(asyncio.as_completed(tasks), total=len(tasks)):
+            result = await f
+            if result:  # 오류가 아닌 것만 저장
+                results.append(result)
 
-    def run_template_experiment(
-        self,
-        train_data: pd.DataFrame,
-        valid_data: pd.DataFrame
-    ) -> Dict:
-
-        train_results = self.run(train_data)
-        train_score = evaluate_correction(train_data, train_results)
-
-        valid_results = self.run(valid_data)
-        valid_score = evaluate_correction(valid_data, valid_results)
-
-        return {
-            'train_recall': train_score,
-            'valid_recall': valid_score,
-            'train_results': train_results,
-            'valid_results': valid_results
-        }
+    with open(out_path, "w", encoding="utf-8") as fout:
+        for r in results:
+            fout.write(json.dumps(r, ensure_ascii=False) + "\n")
