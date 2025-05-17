@@ -76,23 +76,24 @@ def extract_error_patterns(
     with open(results_path, encoding="utf-8") as f:
         for line in f:
             item = json.loads(line)
-            if "target" not in item or item["prediction"].startswith("[ERROR]"):
+            target = item.get("target")
+            if not target or item["prediction"].startswith("[ERROR]"):
                 continue
-            lcs, recall, _ = compute_scores(item["prediction"], item["target"])
+            lcs, recall, _ = compute_scores(item["prediction"], target)
             if recall < recall_threshold:
-                error_type = classify_error(item["input"], item["prediction"])  # 🔁 rule 기반 분류기 추가
+                error_type = classify_error(item["input"], item["prediction"])
                 patterns.append({
                     "template_id": item["template_id"],
                     "source_id": item["id"],
                     "recall": round(recall, 3),
                     "error_type": error_type,
-                    "example": f"{item['input']} → {item['target']}"
+                    "example": f"{item['input']} → {target}"
                 })
 
     with open(output_path, "w", encoding="utf-8") as fout:
         for p in patterns:
             fout.write(json.dumps(p, ensure_ascii=False) + "\n")
-
+            
 def classify_error(src: str, pred: str) -> str:
     if "은 " in src or "는 " in src or "이 " in src:
         return "조사 오류"

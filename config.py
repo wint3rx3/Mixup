@@ -13,7 +13,7 @@ ERROR_PATTERN_PATH = "data/prompt_error_patterns.jsonl"
 DOCS_DIR = "docs/"
 
 # 📊 평가 기준
-RECALL_THRESHOLD = 0.5
+RECALL_THRESHOLD = 0.6
 
 # 🧠 템플릿 검증
 MAX_CHAR_LENGTH = 2000
@@ -23,6 +23,6 @@ FORBIDDEN_PHRASES = [
 ALLOWED_ROLES = {"system", "user"}
 
 # 🧪 실험 파라미터
-SAMPLE_SIZE = 100
+SAMPLE_SIZE = 300
 TOP_K = 3
 N_CHILDREN = 2

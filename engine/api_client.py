@@ -2,6 +2,7 @@
 
 import os
 import json
+import asyncio
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
@@ -17,12 +18,17 @@ client = AsyncOpenAI(
     base_url=BASE_URL
 )
 
-async def call_llm(messages: list) -> str:
-    try:
-        response = await client.chat.completions.create(
-            model=MODEL,
-            messages=messages
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        raise RuntimeError(f"LLM 호출 실패: {e}")
+async def call_llm(messages: list, retries: int = 3, delay: float = 1.2) -> str:
+    for attempt in range(retries):
+        try:
+            response = await client.chat.completions.create(
+                model=MODEL,
+                messages=messages
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            if "429" in str(e):
+                await asyncio.sleep(delay)
+            else:
+                break
+    return "[ERROR] 호출 실패"

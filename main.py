@@ -1,5 +1,3 @@
-# scripts/main.py
-
 import asyncio
 import os
 import aiohttp
@@ -33,7 +31,7 @@ async def main_loop(
     ensure_graph_exists(graph)
 
     # Step 2. Run base templates on sample data
-    print("🚀 Running LLM experiments...")
+    print("\n🚀 Running LLM experiments...")
 
     latest_gen = max(node.generation for node in graph.nodes.values())
 
@@ -51,27 +49,44 @@ async def main_loop(
     await run_all(limit=sample_size, templates=templates)
 
     # Step 3. Evaluate predictions and score
-    print("📊 Evaluating results...")
-    evaluate()
+    print("\n📊 Evaluating results...")
+    memory = evaluate()
 
-    # ✅ Step 3.5. Extract failure patterns (RAG 문서용)
-    print("📎 Extracting failure patterns...")
+    print("\n📋 템플릿 평가 요약:")
+    for m in memory:
+        print(f" - {m['template_id']} | eval_count={m['eval_count']} | "
+              f"recall={m['avg_recall']} | precision={m['avg_precision']} | lcs={m['avg_lcs']}")
+
+    # Step 3.5. Extract failure patterns (RAG 문서용)
+    print("\n📎 Extracting failure patterns...")
     extract_error_patterns()
 
     # Step 4. Select top-k templates
+    print(f"\n🌟 Selecting top-{top_k} templates for next generation...")
     top_nodes = graph.top_k_from_memory("data/memory.jsonl", k=top_k)
+    for node in top_nodes:
+        print(f" - {node.id} (generation {node.generation})")
 
     # Step 5. Generate child prompts using RAG
-    print("🧬 Generating child templates...")
+    print("\n🧬 Generating child templates...")
     async with asyncio.Semaphore(4):
         async with aiohttp.ClientSession() as session:
             children = await generate_child_prompts(session, top_nodes, n_children=n_children)
 
+    print(f"\n🌱 자녀 템플릿 생성: 총 {len(children)}개")
+    if children:
+        print("📌 부모 → 자식 목록:")
+        for child in children:
+            print(f" - {child['description']} → {child['template'][:60]}...")
+    else:
+        print("⚠️ 생성된 자녀 템플릿이 없습니다.")
+
     # Step 6. Add children to graph
     graph.add_generation(top_nodes, children)
 
+    latest_generation = max(node.generation for node in graph.nodes.values())
+    print(f"\n📈 현재 그래프 세대 수: {latest_generation}")
     print("✅ One generation complete.")
 
 if __name__ == "__main__":
     asyncio.run(main_loop())
-
