@@ -55,7 +55,7 @@ async def main_loop(
     print("\n📋 템플릿 평가 요약:")
     for m in memory:
         print(f" - {m['template_id']} | eval_count={m['eval_count']} | "
-              f"recall={m['avg_recall']} | precision={m['avg_precision']} | lcs={m['avg_lcs']}")
+            f"recall={m['avg_recall']} | precision={m['avg_precision']}")
 
     # Step 3.5. Extract failure patterns (RAG 문서용)
     print("\n📎 Extracting failure patterns...")
